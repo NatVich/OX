@@ -1,0 +1,270 @@
+<title>Graph Paper X O</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gochi+Hand&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: one centered notebook sheet — scoreboard, 3x3 board drawn in pen, controls below */
+:root {
+  --paper: #f7f9fb;
+  --grid: #d6e2ee;
+  --ink: #1f2a3a;
+  --muted: #5b6b7f;
+  --x: #2a3f8f;      /* ballpoint blue */
+  --o: #c2343c;      /* red marker */
+  --hl: #ffe98a;     /* highlighter */
+  --line: #33415a;
+  --font-hand: "Gochi Hand", "Comic Sans MS", "Segoe Print", cursive;
+  --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #14202e; --grid: #22344a; --ink: #e6edf5; --muted: #93a4b8;
+    --x: #8fb2ff; --o: #ff8a8f; --hl: #5c4f12; --line: #c3d0de; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #14202e; --grid: #22344a; --ink: #e6edf5; --muted: #93a4b8;
+  --x: #8fb2ff; --o: #ff8a8f; --hl: #5c4f12; --line: #c3d0de; color-scheme: dark;
+}
+html, body { min-height: 100%; }
+body {
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px;
+}
+main { max-width: 440px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-family: var(--font-hand); font-weight: 400; font-size: 2.6rem; margin: 0; line-height: 1; text-wrap: balance; }
+h1 .x { color: var(--x); } h1 .o { color: var(--o); }
+
+.score { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-variant-numeric: tabular-nums; }
+.score div { display: flex; flex-direction: column; align-items: center; padding: 6px 0; border-bottom: 2px solid transparent; }
+.score div.turn { border-bottom-color: currentColor; }
+.score .lbl { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.score .n { font-family: var(--font-body); font-weight: 700; font-size: 1.7rem; line-height: 1.2; }
+.score .sx { color: var(--x); } .score .so { color: var(--o); } .score .sd { color: var(--muted); }
+
+.status { font-family: var(--font-hand); font-size: 1.6rem; min-height: 2.2rem; text-align: center; }
+.status mark { background: linear-gradient(transparent 45%, var(--hl) 45%, var(--hl) 90%, transparent 90%); color: inherit; padding: 0 4px; }
+
+.board { position: relative; width: 100%; aspect-ratio: 1; max-width: 100%; }
+.board svg.grid, .board svg.win { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.board svg.grid path { stroke: var(--line); stroke-width: 3; fill: none; stroke-linecap: round; }
+.cells { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); }
+.cell { appearance: none; background: transparent; border: 0; padding: 0; margin: 0; position: relative; min-width: 0; min-height: 0; cursor: pointer; border-radius: 8px; }
+.cell:disabled { cursor: default; }
+.cell:focus-visible { outline: 3px dashed var(--muted); outline-offset: -8px; }
+.cell svg { position: absolute; inset: 14%; width: 72%; height: 72%; display: block; overflow: visible; }
+.cell path, .cell circle { fill: none; stroke-width: 9; stroke-linecap: round; }
+.cell .mx { stroke: var(--x); } .cell .mo { stroke: var(--o); }
+.cell .draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: ink .28s ease-out forwards; }
+.cell .draw.d2 { animation-delay: .18s; }
+.cell.dim { opacity: .35; transition: opacity .3s; }
+@media (hover: hover) { .cell:not(:disabled):hover { background: color-mix(in srgb, var(--hl) 35%, transparent); } }
+.board svg.win line { stroke: var(--ink); stroke-width: 7; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: ink .45s ease-out forwards; }
+@keyframes ink { to { stroke-dashoffset: 0; } }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.seg { display: inline-flex; border: 2px solid var(--line); border-radius: 999px; overflow: hidden; }
+.seg button, .btn {
+  font: 700 .9rem var(--font-body); color: var(--ink); background: var(--paper);
+  border: 0; padding: 9px 16px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.btn { border: 2px solid var(--line); border-radius: 999px; }
+.btn.primary { background: var(--ink); color: var(--paper); }
+.seg button:focus-visible, .btn:focus-visible { outline: 3px solid var(--x); outline-offset: 2px; }
+.hint { text-align: center; font-size: .85rem; color: var(--muted); margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cell .draw, .board svg.win line { animation: none; stroke-dashoffset: 0; }
+}
+</style>
+
+<main>
+  <h1><span class="x">X</span> &amp; <span class="o">O</span></h1>
+
+  <div class="score" aria-live="polite">
+    <div class="sx" id="score-x"><span class="lbl" id="lbl-x">Player X</span><span class="n" id="n-x">0</span></div>
+    <div class="sd"><span class="lbl">Draws</span><span class="n" id="n-d">0</span></div>
+    <div class="so" id="score-o"><span class="lbl" id="lbl-o">Player O</span><span class="n" id="n-o">0</span></div>
+  </div>
+
+  <div class="status" id="status" aria-live="polite"></div>
+
+  <div class="board">
+    <svg class="grid" viewBox="0 0 300 300" aria-hidden="true">
+      <path d="M101 8 C 99 110, 102 200, 100 292"></path>
+      <path d="M200 6 C 202 100, 198 210, 201 294"></path>
+      <path d="M8 100 C 110 102, 200 98, 292 101"></path>
+      <path d="M6 199 C 100 201, 210 197, 294 200"></path>
+    </svg>
+    <div class="cells" id="cells" role="grid" aria-label="Game board"></div>
+    <svg class="win" id="win" viewBox="0 0 300 300" aria-hidden="true"></svg>
+  </div>
+
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Opponent">
+      <button id="mode-2p" type="button" aria-pressed="true">2 players</button>
+      <button id="mode-cpu" type="button" aria-pressed="false">vs computer</button>
+    </div>
+    <button class="btn primary" id="again" type="button">New round</button>
+    <button class="btn" id="reset" type="button">Reset score</button>
+  </div>
+  <p class="hint">Three in a row wins. Loser of the last round goes first next round.</p>
+</main>
+
+<script>
+(() => {
+  const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  const $ = id => document.getElementById(id);
+  const cellsEl = $('cells'), statusEl = $('status'), winEl = $('win');
+
+  let S;
+
+  // Build the nine buttons once and update them in place, so keyboard focus survives each move.
+  const cellBtns = Array.from({ length: 9 }, (_, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'cell';
+    btn.type = 'button';
+    btn.setAttribute('role', 'gridcell');
+    btn.addEventListener('click', () => play(i));
+    cellsEl.appendChild(btn);
+    return btn;
+  });
+
+  function winner(b) {
+    for (const l of LINES) if (b[l[0]] && b[l[0]] === b[l[1]] && b[l[0]] === b[l[2]]) return { p: b[l[0]], line: l };
+    return b.every(Boolean) ? { p: null } : null;
+  }
+
+  // Minimax with a little randomness so the computer is beatable now and then.
+  function cpuMove(b) {
+    const free = b.map((v, i) => v ? -1 : i).filter(i => i >= 0);
+    if (Math.random() < 0.15) return free[Math.floor(Math.random() * free.length)];
+    let best = -Infinity, moves = [];
+    for (const i of free) {
+      b[i] = 'O'; const s = mm(b, false, 0); b[i] = null;
+      if (s > best) { best = s; moves = [i]; } else if (s === best) moves.push(i);
+    }
+    return moves[Math.floor(Math.random() * moves.length)];
+  }
+  function mm(b, max, d) {
+    const w = winner(b);
+    if (w) return w.p === 'O' ? 10 - d : w.p === 'X' ? d - 10 : 0;
+    let best = max ? -Infinity : Infinity;
+    for (let i = 0; i < 9; i++) if (!b[i]) {
+      b[i] = max ? 'O' : 'X';
+      const s = mm(b, !max, d + 1);
+      b[i] = null;
+      best = max ? Math.max(best, s) : Math.min(best, s);
+    }
+    return best;
+  }
+
+  const markSVG = (p, animate) => {
+    const a = animate ? 'draw' : '';
+    return p === 'X'
+      ? `<svg viewBox="0 0 100 100"><path class="mx ${a}" pathLength="1" d="M12 14 C 40 42, 60 60, 88 88"/><path class="mx ${a} d2" pathLength="1" d="M86 12 C 60 40, 38 62, 14 88"/></svg>`
+      : `<svg viewBox="0 0 100 100"><path class="mo ${a}" pathLength="1" d="M52 10 C 80 10, 92 34, 90 54 C 88 78, 68 92, 48 90 C 24 88, 9 70, 10 48 C 12 26, 30 11, 56 13"/></svg>`;
+  };
+
+  function render(lastMove) {
+    const w = winner(S.board);
+    const cpu = S.mode === 'cpu';
+    S.board.forEach((v, i) => {
+      const btn = cellBtns[i];
+      btn.setAttribute('aria-label', `Row ${Math.floor(i/3)+1}, column ${i%3+1}: ${v || 'empty'}`);
+      btn.disabled = !!v || !!w || (cpu && S.turn === 'O');
+      if (!v) btn.innerHTML = '';
+      else if (i === lastMove || !btn.firstChild) btn.innerHTML = markSVG(v, i === lastMove);
+      btn.classList.toggle('dim', !!(w && w.line && !w.line.includes(i)));
+    });
+
+    winEl.innerHTML = '';
+    if (w && w.line) {
+      const c = i => [50 + (i % 3) * 100, 50 + Math.floor(i / 3) * 100];
+      const [x1, y1] = c(w.line[0]), [x2, y2] = c(w.line[2]);
+      const ext = (a, b) => a + (a - b) * 0.32;
+      winEl.innerHTML = `<line pathLength="1" x1="${ext(x1,x2)}" y1="${ext(y1,y2)}" x2="${ext(x2,x1)}" y2="${ext(y2,y1)}"/>`;
+    }
+
+    const name = p => cpu ? (p === 'X' ? 'You' : 'Computer') : `Player ${p}`;
+    $('lbl-x').textContent = name('X');
+    $('lbl-o').textContent = name('O');
+    $('n-x').textContent = S.score.X;
+    $('n-o').textContent = S.score.O;
+    $('n-d').textContent = S.score.D;
+    $('score-x').classList.toggle('turn', !w && S.turn === 'X');
+    $('score-o').classList.toggle('turn', !w && S.turn === 'O');
+
+    const col = p => `<span style="color:var(--${p.toLowerCase()})">${p}</span>`;
+    if (w && w.p) statusEl.innerHTML = cpu
+      ? (w.p === 'X' ? '<mark>You win!</mark>' : '<mark>Computer wins.</mark>')
+      : `<mark>${col(w.p)} wins!</mark>`;
+    else if (w) statusEl.innerHTML = '<mark>Draw.</mark> Nobody blinked.';
+    else statusEl.innerHTML = cpu && S.turn === 'O' ? 'Computer is thinking…' : `${col(S.turn)} to move`;
+
+    $('mode-2p').setAttribute('aria-pressed', String(!cpu));
+    $('mode-cpu').setAttribute('aria-pressed', String(cpu));
+  }
+
+  function play(i) {
+    if (S.board[i] || winner(S.board)) return;
+    S.board[i] = S.turn;
+    const w = winner(S.board);
+    if (w) {
+      S.score[w.p || 'D']++;
+      S.nextStarter = w.p ? (w.p === 'X' ? 'O' : 'X') : (S.starter === 'X' ? 'O' : 'X');
+    } else S.turn = S.turn === 'X' ? 'O' : 'X';
+    render(i);
+    maybeCpu();
+  }
+
+  let cpuTimer;
+  function maybeCpu() {
+    clearTimeout(cpuTimer);
+    if (S.mode === 'cpu' && S.turn === 'O' && !winner(S.board)) {
+      cpuTimer = setTimeout(() => play(cpuMove(S.board.slice())), 450);
+    }
+  }
+
+  function newRound() {
+    S.starter = S.nextStarter || 'X';
+    S.turn = S.starter;
+    S.board = Array(9).fill(null);
+    render();
+    maybeCpu();
+  }
+
+  function setMode(m) {
+    if (S.mode === m) return;
+    S.mode = m;
+    S.score = { X: 0, O: 0, D: 0 };
+    S.nextStarter = 'X';
+    newRound();
+  }
+
+  $('again').addEventListener('click', newRound);
+  $('reset').addEventListener('click', () => { S.score = { X: 0, O: 0, D: 0 }; S.nextStarter = 'X'; newRound(); });
+  $('mode-2p').addEventListener('click', () => setMode('2p'));
+  $('mode-cpu').addEventListener('click', () => setMode('cpu'));
+
+  function start(data) {
+    S = data && data.board ? data : {
+      board: Array(9).fill(null), turn: 'X', starter: 'X', nextStarter: 'X',
+      mode: '2p', score: { X: 0, O: 0, D: 0 }
+    };
+    render();
+    maybeCpu();
+  }
+  window.claude?.hot?.snapshot?.(() => S);
+  window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
