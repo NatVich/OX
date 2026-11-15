@@ -50,7 +50,15 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
 .score .n { font-family: var(--font-body); font-weight: 700; font-size: 1.7rem; line-height: 1.2; }
 .score .sx { color: var(--x); } .score .so { color: var(--o); } .score .sd { color: var(--muted); }
 
-.status { font-family: var(--font-hand); font-size: 1.6rem; min-height: 2.2rem; text-align: center; }
+.status { font-family: var(--font-hand); font-size: 2rem; line-height: 1.1; min-height: 6.5rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; align-content: center; gap: 4px 12px; text-align: center; }
+.status .big { width: 4.5rem; height: 4.5rem; flex: none; }
+.status .big svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.status .big path { fill: none; stroke-width: 11; stroke-linecap: round; }
+.status .big .mx { stroke: var(--x); } .status .big .mo { stroke: var(--o); }
+.status .big.small { width: 3rem; height: 3rem; }
+.status .pop { animation: pop .45s cubic-bezier(.3, 1.6, .5, 1); }
+.status .next { flex-basis: 100%; font-family: var(--font-body); font-size: .9rem; color: var(--muted); }
+@keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .status mark { background: linear-gradient(transparent 45%, var(--hl) 45%, var(--hl) 90%, transparent 90%); color: inherit; padding: 0 4px; }
 
 .board { position: relative; width: 100%; aspect-ratio: 1; max-width: 100%; }
@@ -84,6 +92,7 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
 
 @media (prefers-reduced-motion: reduce) {
   .cell .draw, .board svg.win line { animation: none; stroke-dashoffset: 0; }
+  .status .pop { animation: none; }
 }
 </style>
 
@@ -117,7 +126,7 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
     <button class="btn primary" id="again" type="button">New round</button>
     <button class="btn" id="reset" type="button">Reset score</button>
   </div>
-  <p class="hint">Three in a row wins. Loser of the last round goes first next round.</p>
+  <p class="hint">Three in a row wins. A new round starts by itself 3 seconds after each game, and the loser goes first.</p>
 </main>
 
 <script>
@@ -204,15 +213,37 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
     $('score-x').classList.toggle('turn', !w && S.turn === 'X');
     $('score-o').classList.toggle('turn', !w && S.turn === 'O');
 
-    const col = p => `<span style="color:var(--${p.toLowerCase()})">${p}</span>`;
-    if (w && w.p) statusEl.innerHTML = cpu
-      ? (w.p === 'X' ? '<mark>You win!</mark>' : '<mark>Computer wins.</mark>')
-      : `<mark>${col(w.p)} wins!</mark>`;
-    else if (w) statusEl.innerHTML = '<mark>Draw.</mark> Nobody blinked.';
-    else statusEl.innerHTML = cpu && S.turn === 'O' ? 'Computer is thinking…' : `${col(S.turn)} to move`;
+    renderStatus();
 
     $('mode-2p').setAttribute('aria-pressed', String(!cpu));
     $('mode-cpu').setAttribute('aria-pressed', String(cpu));
+  }
+
+  // Big mark above the board shows who starts, whose turn it is, and who won.
+  function renderStatus() {
+    const w = winner(S.board);
+    const cpu = S.mode === 'cpu';
+    const fresh = S.board.every(v => !v);
+    const big = (p, extra = '') => `<span class="big ${extra}" aria-hidden="true">${markSVG(p, false)}</span>`;
+    let html;
+    if (w && w.p) html = big(w.p, 'pop') + `<mark>${cpu ? (w.p === 'X' ? 'You win!' : 'Computer wins!') : w.p + ' wins!'}</mark>`;
+    else if (w) html = big('X', 'small') + big('O', 'small') + '<mark>Draw!</mark>';
+    else if (fresh) html = big(S.turn, 'pop') + `<span>${cpu ? (S.turn === 'X' ? 'You start!' : 'Computer starts!') : S.turn + ' starts!'}</span>`;
+    else html = big(S.turn) + `<span>${cpu ? (S.turn === 'X' ? 'Your turn' : 'Computer is thinking…') : S.turn + '’s turn'}</span>`;
+    if (w && countdown > 0) html += `<span class="next">Next round in ${countdown}…</span>`;
+    statusEl.innerHTML = html;
+  }
+
+  let autoTimer, countdown = 0;
+  function scheduleNext() {
+    clearInterval(autoTimer);
+    countdown = 3;
+    renderStatus();
+    autoTimer = setInterval(() => {
+      countdown--;
+      if (countdown <= 0) newRound();
+      else renderStatus();
+    }, 1000);
   }
 
   function play(i) {
@@ -224,6 +255,7 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
       S.nextStarter = w.p ? (w.p === 'X' ? 'O' : 'X') : (S.starter === 'X' ? 'O' : 'X');
     } else S.turn = S.turn === 'X' ? 'O' : 'X';
     render(i);
+    if (w) scheduleNext();
     maybeCpu();
   }
 
@@ -236,6 +268,8 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
   }
 
   function newRound() {
+    clearInterval(autoTimer);
+    countdown = 0;
     S.starter = S.nextStarter || 'X';
     S.turn = S.starter;
     S.board = Array(9).fill(null);
@@ -262,6 +296,7 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
       mode: '2p', score: { X: 0, O: 0, D: 0 }
     };
     render();
+    if (winner(S.board)) scheduleNext();
     maybeCpu();
   }
   window.claude?.hot?.snapshot?.(() => S);
