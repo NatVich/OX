@@ -126,7 +126,7 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
     <button class="btn primary" id="again" type="button">New round</button>
     <button class="btn" id="reset" type="button">Reset score</button>
   </div>
-  <p class="hint">Three in a row wins. A new round starts by itself 3 seconds after each game, and the loser goes first.</p>
+  <p class="hint">Three in a row wins. After a win, tap the board to play again. After a draw, a new round starts by itself. The loser goes first.</p>
 </main>
 
 <script>
@@ -190,7 +190,7 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
     S.board.forEach((v, i) => {
       const btn = cellBtns[i];
       btn.setAttribute('aria-label', `Row ${Math.floor(i/3)+1}, column ${i%3+1}: ${v || 'empty'}`);
-      btn.disabled = !!v || !!w || (cpu && S.turn === 'O');
+      btn.disabled = w ? !w.p : (!!v || (cpu && S.turn === 'O'));
       if (!v) btn.innerHTML = '';
       else if (i === lastMove || !btn.firstChild) btn.innerHTML = markSVG(v, i === lastMove);
       btn.classList.toggle('dim', !!(w && w.line && !w.line.includes(i)));
@@ -230,11 +230,12 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
     else if (w) html = big('X', 'small') + big('O', 'small') + '<mark>Draw!</mark>';
     else if (fresh) html = big(S.turn, 'pop') + `<span>${cpu ? (S.turn === 'X' ? 'You start!' : 'Computer starts!') : S.turn + ' starts!'}</span>`;
     else html = big(S.turn) + `<span>${cpu ? (S.turn === 'X' ? 'Your turn' : 'Computer is thinking…') : S.turn + '’s turn'}</span>`;
-    if (w && countdown > 0) html += `<span class="next">Next round in ${countdown}…</span>`;
+    if (w && w.p) html += `<span class="next">Tap the board to play again</span>`;
+    else if (w && countdown > 0) html += `<span class="next">Next round in ${countdown}…</span>`;
     statusEl.innerHTML = html;
   }
 
-  let autoTimer, countdown = 0;
+  let autoTimer, countdown = 0, endedAt = 0;
   function scheduleNext() {
     clearInterval(autoTimer);
     countdown = 3;
@@ -247,6 +248,11 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
   }
 
   function play(i) {
+    const done = winner(S.board);
+    if (done && done.p) {   // after a win, a tap on the board starts the next round
+      if (Date.now() - endedAt > 800) newRound();   // ignore a quick double tap so the win can be seen
+      return;
+    }
     if (S.board[i] || winner(S.board)) return;
     S.board[i] = S.turn;
     const w = winner(S.board);
@@ -255,7 +261,8 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
       S.nextStarter = w.p ? (w.p === 'X' ? 'O' : 'X') : (S.starter === 'X' ? 'O' : 'X');
     } else S.turn = S.turn === 'X' ? 'O' : 'X';
     render(i);
-    if (w) scheduleNext();
+    if (w) endedAt = Date.now();
+    if (w && !w.p) scheduleNext();
     maybeCpu();
   }
 
@@ -296,7 +303,8 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
       mode: '2p', score: { X: 0, O: 0, D: 0 }
     };
     render();
-    if (winner(S.board)) scheduleNext();
+    const w0 = winner(S.board);
+    if (w0 && !w0.p) scheduleNext();
     maybeCpu();
   }
   window.claude?.hot?.snapshot?.(() => S);
