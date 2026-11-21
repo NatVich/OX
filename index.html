@@ -1,3 +1,7 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Graph Paper X O</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gochi+Hand&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
@@ -25,6 +29,8 @@
   --paper: #14202e; --grid: #22344a; --ink: #e6edf5; --muted: #93a4b8;
   --x: #8fb2ff; --o: #ff8a8f; --hl: #5c4f12; --line: #c3d0de; color-scheme: dark;
 }
+[hidden] { display: none !important; }
+button { -webkit-tap-highlight-color: transparent; }
 html, body { min-height: 100%; }
 body {
   background-color: var(--paper);
@@ -35,6 +41,7 @@ body {
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 16px;
+  margin: 0;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-block: 32px;
@@ -92,6 +99,11 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
 .seg button:focus-visible, .btn:focus-visible { outline: 3px solid var(--x); outline-offset: 2px; }
 .btn.reset:focus-visible { outline-color: var(--o); outline-offset: 3px; }
 .hint { text-align: center; font-size: .85rem; color: var(--muted); margin: 0; }
+.level { flex-basis: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.level .seg button { padding: 10px 18px; font-size: 1rem; }
+.level-note { margin: 0; font-size: .85rem; color: var(--muted); text-align: center; text-wrap: balance; }
+.btn.sound[aria-pressed="false"] { color: var(--muted); }
+#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
 
 @media (prefers-reduced-motion: reduce) {
   .cell .draw, .board svg.win line { animation: none; stroke-dashoffset: 0; }
@@ -126,18 +138,37 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
       <button id="mode-2p" type="button" aria-pressed="true">2 players</button>
       <button id="mode-cpu" type="button" aria-pressed="false">vs computer</button>
     </div>
+    <button class="btn sound" id="sound" type="button" aria-pressed="true">Sound on</button>
+    <div class="level" id="level" hidden>
+      <div class="seg" role="group" aria-label="Computer level">
+        <button id="lvl-easy" type="button" aria-pressed="false">Easy</button>
+        <button id="lvl-medium" type="button" aria-pressed="true">Medium</button>
+        <button id="lvl-hard" type="button" aria-pressed="false">Hard</button>
+      </div>
+      <p class="level-note" id="level-note"></p>
+    </div>
     <button class="btn reset" id="reset" type="button">Reset score</button>
   </div>
-  <p class="hint">Three in a row wins. After a win, tap the board to play again. After a draw, a new round starts by itself. The loser goes first.</p>
+  <p class="hint">Three in a row wins. After a win, tap the board to play again. After a draw, a new round starts by itself. The loser goes first. Scores are saved on this device.</p>
 </main>
+<canvas id="fx" aria-hidden="true"></canvas>
 
 <script>
 (() => {
   const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  const LEVEL_NOTES = {
+    easy: 'Easy: the computer often misses its chance to win.',
+    medium: 'Medium: the computer wins when it can and usually blocks you.',
+    hard: 'Hard: the computer never loses. Can you get a draw?'
+  };
+  const STORE = 'ox-game-v1';
   const $ = id => document.getElementById(id);
   const cellsEl = $('cells'), statusEl = $('status'), winEl = $('win');
 
   let S;
+  const blankScore = () => ({ X: 0, O: 0, D: 0 });
+  const scoreKey = () => S.mode === 'cpu' ? S.level : '2p';   // each opponent keeps its own score
+  const score = () => S.scores[scoreKey()];
 
   // Build the nine buttons once and update them in place, so keyboard focus survives each move.
   const cellBtns = Array.from({ length: 9 }, (_, i) => {
@@ -155,16 +186,33 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
     return b.every(Boolean) ? { p: null } : null;
   }
 
-  // Minimax with a little randomness so the computer is beatable now and then.
-  function cpuMove(b) {
+  const rand = a => a[Math.floor(Math.random() * a.length)];
+  // The square that completes a line for player p, or -1.
+  function findWin(b, p) {
+    for (const l of LINES) {
+      const v = l.map(i => b[i]);
+      if (v.filter(x => x === p).length === 2 && v.includes(null)) return l[v.indexOf(null)];
+    }
+    return -1;
+  }
+
+  // Easy: mostly random. Medium: wins and blocks, but can be tricked. Hard: perfect play.
+  function cpuMove(b, level) {
     const free = b.map((v, i) => v ? -1 : i).filter(i => i >= 0);
-    if (Math.random() < 0.15) return free[Math.floor(Math.random() * free.length)];
+    const win = findWin(b, 'O'), block = findWin(b, 'X');
+    if (level === 'easy') return win >= 0 && Math.random() < 0.5 ? win : rand(free);
+    if (level === 'medium') {
+      if (win >= 0) return win;
+      if (block >= 0 && Math.random() < 0.85) return block;
+      if (!b[4] && Math.random() < 0.6) return 4;
+      return rand(free);
+    }
     let best = -Infinity, moves = [];
     for (const i of free) {
       b[i] = 'O'; const s = mm(b, false, 0); b[i] = null;
       if (s > best) { best = s; moves = [i]; } else if (s === best) moves.push(i);
     }
-    return moves[Math.floor(Math.random() * moves.length)];
+    return rand(moves);
   }
   function mm(b, max, d) {
     const w = winner(b);
@@ -185,6 +233,70 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
       ? `<svg viewBox="0 0 100 100"><path class="mx ${a}" pathLength="1" d="M12 14 C 40 42, 60 60, 88 88"/><path class="mx ${a} d2" pathLength="1" d="M86 12 C 60 40, 38 62, 14 88"/></svg>`
       : `<svg viewBox="0 0 100 100"><path class="mo ${a}" pathLength="1" d="M52 10 C 80 10, 92 34, 90 54 C 88 78, 68 92, 48 90 C 24 88, 9 70, 10 48 C 12 26, 30 11, 56 13"/></svg>`;
   };
+
+  // Sounds: short tones made in the browser, only after the player has tapped something.
+  let ac;
+  function tone(freq, at, dur, vol = 0.12) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'triangle'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(vol, at + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g).connect(ac.destination);
+    o.start(at); o.stop(at + dur + 0.05);
+  }
+  function sfx(kind) {
+    if (!S.sound) return;
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === 'suspended') ac.resume();
+      const t = ac.currentTime + 0.01;
+      if (kind === 'X') tone(660, t, 0.1);
+      else if (kind === 'O') tone(440, t, 0.1);
+      else if (kind === 'win') [523, 659, 784, 1047].forEach((f, i) => tone(f, t + 0.15 + i * 0.1, 0.18));
+      else if (kind === 'lose') [392, 330, 262].forEach((f, i) => tone(f, t + 0.15 + i * 0.15, 0.22, 0.1));
+      else if (kind === 'draw') [440, 440].forEach((f, i) => tone(f, t + 0.15 + i * 0.16, 0.12, 0.08));
+    } catch (e) { /* no audio available */ }
+  }
+
+  // A burst of little X's and O's when a player wins.
+  let fxRaf;
+  function confetti() {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const cv = $('fx'), ctx = cv.getContext('2d'), dpr = window.devicePixelRatio || 1;
+    const W = window.innerWidth, H = window.innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cs = getComputedStyle(document.documentElement);
+    const cols = { X: cs.getPropertyValue('--x').trim(), O: cs.getPropertyValue('--o').trim() };
+    const r = document.querySelector('.board').getBoundingClientRect();
+    const bits = Array.from({ length: 48 }, () => {
+      const m = Math.random() < 0.5 ? 'X' : 'O';
+      return { m, c: cols[m], x: r.left + r.width / 2, y: r.top + r.height / 2,
+        vx: (Math.random() - 0.5) * 12, vy: -4 - Math.random() * 9, a: Math.random() * 6,
+        va: (Math.random() - 0.5) * 0.3, s: 8 + Math.random() * 8 };
+    });
+    const t0 = performance.now(), life = 1800;
+    cancelAnimationFrame(fxRaf);
+    const frame = now => {
+      const el = now - t0;
+      ctx.clearRect(0, 0, W, H);
+      if (el > life) return;
+      ctx.globalAlpha = Math.max(0, 1 - el / life);
+      ctx.lineWidth = 3; ctx.lineCap = 'round';
+      for (const b of bits) {
+        b.vy += 0.35; b.x += b.vx; b.y += b.vy; b.a += b.va;
+        ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.a); ctx.strokeStyle = b.c; ctx.beginPath();
+        const h = b.s / 2;
+        if (b.m === 'X') { ctx.moveTo(-h, -h); ctx.lineTo(h, h); ctx.moveTo(h, -h); ctx.lineTo(-h, h); }
+        else ctx.arc(0, 0, h, 0, Math.PI * 2);
+        ctx.stroke(); ctx.restore();
+      }
+      fxRaf = requestAnimationFrame(frame);
+    };
+    fxRaf = requestAnimationFrame(frame);
+  }
+
+  function save() { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) { /* storage blocked */ } }
 
   function render(lastMove) {
     const w = winner(S.board);
@@ -209,9 +321,10 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
     const name = p => cpu ? (p === 'X' ? 'You' : 'Computer') : `Player ${p}`;
     $('lbl-x').textContent = name('X');
     $('lbl-o').textContent = name('O');
-    $('n-x').textContent = S.score.X;
-    $('n-o').textContent = S.score.O;
-    $('n-d').textContent = S.score.D;
+    const sc = score();
+    $('n-x').textContent = sc.X;
+    $('n-o').textContent = sc.O;
+    $('n-d').textContent = sc.D;
     $('score-x').classList.toggle('turn', !w && S.turn === 'X');
     $('score-o').classList.toggle('turn', !w && S.turn === 'O');
 
@@ -219,6 +332,14 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
 
     $('mode-2p').setAttribute('aria-pressed', String(!cpu));
     $('mode-cpu').setAttribute('aria-pressed', String(cpu));
+    $('level').hidden = !cpu;
+    for (const l of ['easy', 'medium', 'hard']) $('lvl-' + l).setAttribute('aria-pressed', String(S.level === l));
+    $('level-note').textContent = LEVEL_NOTES[S.level];
+    renderSound();
+  }
+  function renderSound() {
+    $('sound').setAttribute('aria-pressed', String(S.sound));
+    $('sound').textContent = S.sound ? 'Sound on' : 'Sound off';
   }
 
   // Big mark above the board shows who starts, whose turn it is, and who won.
@@ -257,14 +378,21 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
     }
     if (S.board[i] || winner(S.board)) return;
     S.board[i] = S.turn;
+    sfx(S.turn);
     const w = winner(S.board);
     if (w) {
-      S.score[w.p || 'D']++;
+      score()[w.p || 'D']++;
       S.nextStarter = w.p ? (w.p === 'X' ? 'O' : 'X') : (S.starter === 'X' ? 'O' : 'X');
     } else S.turn = S.turn === 'X' ? 'O' : 'X';
     render(i);
-    if (w) endedAt = Date.now();
+    if (w) {
+      endedAt = Date.now();
+      if (!w.p) sfx('draw');
+      else if (S.mode === 'cpu' && w.p === 'O') sfx('lose');
+      else { sfx('win'); confetti(); }
+    }
     if (w && !w.p) scheduleNext();
+    save();
     maybeCpu();
   }
 
@@ -272,7 +400,7 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
   function maybeCpu() {
     clearTimeout(cpuTimer);
     if (S.mode === 'cpu' && S.turn === 'O' && !winner(S.board)) {
-      cpuTimer = setTimeout(() => play(cpuMove(S.board.slice())), 450);
+      cpuTimer = setTimeout(() => play(cpuMove(S.board.slice(), S.level)), 500);
     }
   }
 
@@ -283,26 +411,53 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
     S.turn = S.starter;
     S.board = Array(9).fill(null);
     render();
+    save();
     maybeCpu();
   }
 
   function setMode(m) {
     if (S.mode === m) return;
     S.mode = m;
-    S.score = { X: 0, O: 0, D: 0 };
+    S.nextStarter = 'X';
+    newRound();
+  }
+  function setLevel(l) {
+    if (S.level === l) return;
+    S.level = l;
     S.nextStarter = 'X';
     newRound();
   }
 
-  $('reset').addEventListener('click', () => { S.score = { X: 0, O: 0, D: 0 }; S.nextStarter = 'X'; newRound(); });
+  $('reset').addEventListener('click', () => { S.scores[scoreKey()] = blankScore(); S.nextStarter = 'X'; newRound(); });
   $('mode-2p').addEventListener('click', () => setMode('2p'));
   $('mode-cpu').addEventListener('click', () => setMode('cpu'));
+  for (const l of ['easy', 'medium', 'hard']) $('lvl-' + l).addEventListener('click', () => setLevel(l));
+  $('sound').addEventListener('click', () => { S.sound = !S.sound; renderSound(); save(); sfx('X'); });
+
+  // Build a clean state from saved data, filling in anything missing or from an older version.
+  function normalize(d) {
+    const s = {
+      board: Array(9).fill(null), turn: 'X', starter: 'X', nextStarter: 'X', mode: '2p', level: 'medium', sound: true,
+      scores: { '2p': blankScore(), easy: blankScore(), medium: blankScore(), hard: blankScore() }
+    };
+    if (!d || typeof d !== 'object') return s;
+    const P = v => v === 'X' || v === 'O' ? v : null;
+    if (Array.isArray(d.board) && d.board.length === 9) s.board = d.board.map(P);
+    for (const k of ['turn', 'starter', 'nextStarter']) if (P(d[k])) s[k] = d[k];
+    if (d.mode === 'cpu') s.mode = 'cpu';
+    if (LEVEL_NOTES[d.level]) s.level = d.level;
+    if (typeof d.sound === 'boolean') s.sound = d.sound;
+    for (const k of Object.keys(s.scores)) {
+      const v = d.scores && d.scores[k];
+      if (v) s.scores[k] = { X: +v.X || 0, O: +v.O || 0, D: +v.D || 0 };
+    }
+    if (d.score && !d.scores) s.scores[s.mode === 'cpu' ? s.level : '2p'] = { X: +d.score.X || 0, O: +d.score.O || 0, D: +d.score.D || 0 };
+    return s;
+  }
+  function loadSaved() { try { return JSON.parse(localStorage.getItem(STORE)); } catch (e) { return null; } }
 
   function start(data) {
-    S = data && data.board ? data : {
-      board: Array(9).fill(null), turn: 'X', starter: 'X', nextStarter: 'X',
-      mode: '2p', score: { X: 0, O: 0, D: 0 }
-    };
+    S = normalize(data && data.board ? data : loadSaved());
     render();
     const w0 = winner(S.board);
     if (w0 && !w0.p) scheduleNext();
