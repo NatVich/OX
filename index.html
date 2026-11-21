@@ -86,8 +86,11 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
 }
 .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 .btn { border: 2px solid var(--line); border-radius: 999px; }
-.btn.primary { background: var(--ink); color: var(--paper); }
+.btn.reset { flex-basis: 100%; max-width: 320px; font-size: 1.25rem; padding: 14px 24px; background: var(--o); border-color: var(--o); color: var(--paper); }
+@media (hover: hover) { .btn.reset:hover { filter: brightness(1.08); } }
+.btn.reset:active { transform: translateY(1px); }
 .seg button:focus-visible, .btn:focus-visible { outline: 3px solid var(--x); outline-offset: 2px; }
+.btn.reset:focus-visible { outline-color: var(--o); outline-offset: 3px; }
 .hint { text-align: center; font-size: .85rem; color: var(--muted); margin: 0; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -123,8 +126,7 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
       <button id="mode-2p" type="button" aria-pressed="true">2 players</button>
       <button id="mode-cpu" type="button" aria-pressed="false">vs computer</button>
     </div>
-    <button class="btn primary" id="again" type="button">New round</button>
-    <button class="btn" id="reset" type="button">Reset score</button>
+    <button class="btn reset" id="reset" type="button">Reset score</button>
   </div>
   <p class="hint">Three in a row wins. After a win, tap the board to play again. After a draw, a new round starts by itself. The loser goes first.</p>
 </main>
@@ -292,7 +294,6 @@ h1 .x { color: var(--x); } h1 .o { color: var(--o); }
     newRound();
   }
 
-  $('again').addEventListener('click', newRound);
   $('reset').addEventListener('click', () => { S.score = { X: 0, O: 0, D: 0 }; S.nextStarter = 'X'; newRound(); });
   $('mode-2p').addEventListener('click', () => setMode('2p'));
   $('mode-cpu').addEventListener('click', () => setMode('cpu'));
